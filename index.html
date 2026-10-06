@@ -8,13 +8,13 @@
 :root{
   --paper:#f5f7f9; --card:#ffffff; --ink:#16202b; --ink-soft:#5c6c7b;
   --line:#dce3ea; --accent:#1f6f6b; --accent-soft:#e4f1ef; --done:#8fa0ae;
-  --on-accent:#ffffff;
+  --on-accent:#ffffff; --bad:#b03a2e;
   color-scheme: light;
 }
 :root[data-theme="dark"]{
   --paper:#10151a; --card:#182029; --ink:#e7eef4; --ink-soft:#97a7b5;
   --line:#26323d; --accent:#62d2c6; --accent-soft:#15302f; --done:#64737f;
-  --on-accent:#06211f;
+  --on-accent:#06211f; --bad:#ff8f7d;
   color-scheme: dark;
 }
 *{box-sizing:border-box}
@@ -156,6 +156,10 @@ input[type=checkbox]{accent-color:var(--accent); width:16px; height:16px}
 .q-tools button{flex:0 0 auto; padding:5px 10px; font-size:12.5px}
 .q-list{display:flex; flex-direction:column; gap:8px; max-height:46vh; overflow-y:auto; padding-right:2px}
 .q-empty{margin:0; font-size:13px; color:var(--ink-soft); line-height:1.7}
+.q-save{margin:9px 0 0; font-size:11.5px; color:var(--ink-soft); text-align:right; font-variant-numeric:tabular-nums}
+.q-save.bad{color:var(--bad); font-weight:600}
+.warn.bad{border-color:var(--bad); background:transparent; color:var(--ink)}
+.warn.bad b{color:var(--bad)}
 
 /* 폴더 */
 .fold{border:1px solid var(--line); border-radius:9px; overflow:hidden; background:var(--paper)}
@@ -268,6 +272,7 @@ kbd{font:inherit; font-size:11.5px; border:1px solid var(--line); border-bottom-
 
   <div id="nosupport" class="warn" hidden>이 브라우저에는 음성 합성 기능이 없습니다. 크롬이나 엣지에서 열어주세요.</div>
   <div id="novoice" class="warn" hidden>한국어 음성이 설치돼 있지 않습니다. 설정 → 시간 및 언어 → 음성에서 한국어 음성을 추가하면 목록에 나타납니다.</div>
+  <div id="saveWarn" class="warn bad" hidden>저장이 되지 않고 있습니다. 대기열의 <b>내보내기</b>를 눌러 JSON 파일로 먼저 백업하세요.</div>
 
   <div class="bar">
     <div class="row trans">
@@ -346,6 +351,7 @@ kbd{font:inherit; font-size:11.5px; border:1px solid var(--line); border-bottom-
       <button id="collapse" title="폴더 모두 접기">모두 접기</button>
     </div>
     <div id="qList" class="q-list"></div>
+    <p class="q-save" id="saveState">불러오는 중…</p>
     <input type="file" id="impFile" accept="application/json,.json" hidden>
   </section>
 
@@ -374,6 +380,7 @@ kbd{font:inherit; font-size:11.5px; border:1px solid var(--line); border-bottom-
       folderIn=$('folder'), folderList=$('folderList'), searchIn=$('q'), collapseBtn=$('collapse'),
       expBtn=$('expBtn'), impBtn=$('impBtn'), impFile=$('impFile'),
       bmBtn=$('bm'), bmWrap=$('bmWrap'), bmList=$('bmList'), bmCount=$('bmCount'), bmDoc=$('bmDoc'),
+      saveState=$('saveState'), saveWarn=$('saveWarn'),
       side=$('side'), scrim=$('scrim'), queueBtn=$('queueBtn'), qBadge=$('qBadge');
 
   var SAMPLE = "# 상부호흡기계 핵심 정리\n\n## 1. 부비동염 Sinusitis ★★★\n\n**원인·병태생리**\n\n- 비염이 부비동으로 퍼지거나 부비동 배액통로가 막혀 발생\n- 정상적으로 부비동 분비물은 코선반 아래로 배액됨 → 통로 막히면 분비물 정체 → 염증\n- 위험요인: 알레르기, 오래 지속되는 감기, 비중격만곡\n\n**증상**\n\n- 급성 부비동염: 상기도감염, 알레르기비염, 수영·치과치료 후 발생 가능\n- 만성 부비동염: 알레르기·비용종과 관련, 반복되는 급성 감염으로 발생\n\n> 기호는 읽지 않고 서식으로만 적용됩니다. 별표와 샵은 소리로 나가지 않습니다.";
@@ -386,18 +393,116 @@ kbd{font:inherit; font-size:11.5px; border:1px solid var(--line); border-bottom-
   var MAX=160;
   var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  /* ---------- 저장 ---------- */
+  /* ---------- 저장 ----------
+     브라우저 내부 DB(IndexedDB)가 주 저장소이고 localStorage는 보조다.
+     localStorage는 5MB쯤에서 막히는데 그 실패가 겉으로 드러나지 않아서,
+     긴 글을 여러 개 넣어 두면 저장이 안 된 채 다음에 열 때 사라진다.
+     그래서 두 곳에 같이 쓰고, 둘 다 실패하면 화면에 알린다. */
+  var DBNAME='nangdok', STORE='state', KEY='main', LSKEY='nangdok';
+  var idb=null, saveTimer=null, saveSeq=0, persistOn=false;
+
+  function openIDB(done){
+    if(!window.indexedDB){ done(); return; }
+    var rq;
+    try{ rq=indexedDB.open(DBNAME, 1); }catch(e){ done(); return; }
+    var finished=false;
+    function fin(){ if(!finished){ finished=true; done(); } }
+    rq.onupgradeneeded=function(){
+      var d=rq.result;
+      if(!d.objectStoreNames.contains(STORE)) d.createObjectStore(STORE);
+    };
+    rq.onsuccess=function(){ idb=rq.result; fin(); };
+    rq.onerror=function(){ fin(); };
+    rq.onblocked=function(){ fin(); };
+    setTimeout(fin, 3000);            /* DB가 열리지 않아도 화면은 뜨게 */
+  }
+  function idbPut(obj, ok, fail){
+    if(!idb){ fail(); return; }
+    var tx;
+    try{ tx=idb.transaction(STORE,'readwrite'); }catch(e){ fail(); return; }
+    tx.oncomplete=ok; tx.onerror=fail; tx.onabort=fail;
+    try{ tx.objectStore(STORE).put(obj, KEY); }catch(e){ fail(); }
+  }
+  function idbGet(cb){
+    if(!idb){ cb(null); return; }
+    var rq;
+    try{ rq=idb.transaction(STORE,'readonly').objectStore(STORE).get(KEY); }
+    catch(e){ cb(null); return; }
+    rq.onsuccess=function(){ cb(rq.result||null); };
+    rq.onerror=function(){ cb(null); };
+  }
+
+  function snapshot(){
+    return {
+      v:2, saved:Date.now(),
+      docs:docs, docIdx:docIdx, follow:follow, openFolders:openFolders,
+      rate:rate.value, pitch:pitch.value, vol:vol.value, gap:gap.value,
+      read:readSz.value, voice:voiceSel.value, repeat:repeatBox.checked,
+      auto:autoBox.checked, theme:document.documentElement.getAttribute('data-theme')
+    };
+  }
+  function hhmm(){
+    var d=new Date(), p=function(n){ return (n<10?'0':'')+n; };
+    return p(d.getHours())+':'+p(d.getMinutes());
+  }
+  function note(txt, bad){
+    saveState.textContent = txt;
+    saveState.classList.toggle('bad', !!bad);
+    saveWarn.hidden = !bad;
+  }
+  function okNote(where){
+    note('저장됨 '+hhmm()+' · 글 '+docs.length+'개 · '+where + (persistOn ? ' · 영구' : ''), false);
+  }
+  function writeNow(){
+    var snap=snapshot(), my=++saveSeq, lsOk=false, json=null;
+    try{ json=JSON.stringify(snap); }catch(e){ json=null; }
+    if(json!==null){
+      try{ localStorage.setItem(LSKEY, json); lsOk=true; }catch(e){ lsOk=false; }
+    }
+    if(!idb){
+      if(lsOk) okNote('브라우저 저장소');
+      else note('저장 실패 — 내보내기로 백업하세요', true);
+      return;
+    }
+    idbPut(snap, function(){
+      if(my!==saveSeq) return;
+      okNote(lsOk ? '내부 DB' : '내부 DB(단독)');
+    }, function(){
+      if(my!==saveSeq) return;
+      if(lsOk) okNote('브라우저 저장소');
+      else note('저장 실패 — 내보내기로 백업하세요', true);
+    });
+  }
   function save(){
+    clearTimeout(saveTimer);
+    saveTimer=setTimeout(writeNow, 400);
+  }
+  function flushSave(){ clearTimeout(saveTimer); writeNow(); }
+
+  function loadState(cb){
+    openIDB(function(){
+      idbGet(function(fromDB){
+        var ls=null;
+        try{ ls=JSON.parse(localStorage.getItem(LSKEY)||'null'); }catch(e){ ls=null; }
+        var pick;
+        if(fromDB && ls) pick = (fromDB.saved||0) >= (ls.saved||0) ? fromDB : ls;
+        else pick = fromDB || ls;
+        cb(pick);
+      });
+    });
+  }
+  /* 브라우저가 공간을 되찾느라 지우지 못하게 못을 박아 둔다 */
+  function askPersist(){
+    if(!navigator.storage || !navigator.storage.persist) return;
     try{
-      localStorage.setItem('nangdok', JSON.stringify({
-        docs:docs, docIdx:docIdx, follow:follow, openFolders:openFolders,
-        rate:rate.value, pitch:pitch.value, vol:vol.value, gap:gap.value,
-        read:readSz.value, voice:voiceSel.value, repeat:repeatBox.checked,
-        auto:autoBox.checked, theme:document.documentElement.getAttribute('data-theme')
-      }));
+      navigator.storage.persisted().then(function(p){
+        if(p){ persistOn=true; return null; }
+        return navigator.storage.persist();
+      }).then(function(got){
+        if(got===true) persistOn=true;
+      })['catch'](function(){});
     }catch(e){}
   }
-  function load(){ try{ return JSON.parse(localStorage.getItem('nangdok')||'null'); }catch(e){ return null; } }
 
   /* ---------- 마크다운 ----------
      기호는 읽지도 않고 화면에도 남기지 않는다. 굵게·기울임·제목·목록은
@@ -1269,7 +1374,8 @@ kbd{font:inherit; font-size:11.5px; border:1px solid var(--line); border-bottom-
     setTimeout(fillVoices, 500);
   }
 
-  var st=load();
+  askPersist();
+  loadState(function(st){
   if(st){
     if(st.theme){ document.documentElement.setAttribute('data-theme', st.theme); label(themeBtn, st.theme==='dark'?'주간':'야간', st.theme==='dark'?'◑':'◐'); }
     if(st.rate!=null) rate.value=st.rate;
@@ -1304,6 +1410,13 @@ kbd{font:inherit; font-size:11.5px; border:1px solid var(--line); border-bottom-
   fillFolderList();
   showDoc(docIdx);
   setMode(false);
+  flushSave();                 /* 열자마자 한 번 — 예전 저장본을 내부 DB로 옮긴다 */
+  });
+
+  window.addEventListener('beforeunload', flushSave);
+  document.addEventListener('visibilitychange', function(){
+    if(document.visibilityState==='hidden') flushSave();
+  });
 })();
 </script>
 </body>
