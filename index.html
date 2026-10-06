@@ -206,6 +206,8 @@ input[type=checkbox]{accent-color:var(--accent); width:16px; height:16px}
 .q-ic{flex:0 0 auto; border:0; border-radius:0; border-left:1px solid var(--line); padding:0 10px; color:var(--ink-soft); font-size:13px}
 .q-row.on .q-ic{border-left-color:var(--accent)}
 .q-move{display:flex; gap:6px; padding:0 9px 8px; align-items:center; flex-wrap:wrap}
+.q-move .q-rename{flex:1 1 100%; font-size:13.5px; font-weight:500}
+.q-move .main{color:var(--on-accent); background:var(--accent); border-color:var(--accent)}
 .q-move select,.q-move input{
   font:inherit; font-size:12.5px; padding:4px 7px; border:1px solid var(--line);
   border-radius:7px; background:var(--card); color:var(--ink); min-width:0; flex:1 1 120px;
@@ -225,7 +227,7 @@ input[type=checkbox]{accent-color:var(--accent); width:16px; height:16px}
 .s.now.bm{box-shadow:inset 3px 0 0 var(--accent)}
 
 /* 편집 화면 폴더 칸 */
-.ed-row{display:flex; gap:10px; margin-bottom:9px}
+.ed-row{display:flex; gap:10px; margin-bottom:9px; flex-wrap:wrap}
 .ed-f{display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--ink-soft); flex:1 1 auto; min-width:0}
 .ed-f input{
   flex:1 1 auto; min-width:0; font:inherit; font-size:13.5px; padding:7px 10px;
@@ -311,8 +313,11 @@ kbd{font:inherit; font-size:11.5px; border:1px solid var(--line); border-bottom-
     <details class="set">
       <summary><span>읽기 설정</span></summary>
       <div class="grid">
-        <label class="f" for="voice">목소리
+        <label class="f" for="voice">한국어 목소리
           <select id="voice"></select>
+        </label>
+        <label class="f" for="envoice">영어 목소리
+          <select id="envoice"></select>
         </label>
         <label class="f" for="rate">속도 <b id="rateV">1.00배</b>
           <input type="range" id="rate" min="0.5" max="3" step="0.05" value="1">
@@ -331,6 +336,7 @@ kbd{font:inherit; font-size:11.5px; border:1px solid var(--line); border-bottom-
         </label>
         <label class="chk" for="repeat"><input type="checkbox" id="repeat"> 끝나면 처음부터 반복</label>
         <label class="chk" for="auto"><input type="checkbox" id="auto" checked> 붙여넣으면 바로 읽기</label>
+        <label class="chk" for="enmix"><input type="checkbox" id="enmix" checked> 영어는 영어 목소리로 읽기</label>
       </div>
     </details>
   </div>
@@ -340,6 +346,9 @@ kbd{font:inherit; font-size:11.5px; border:1px solid var(--line); border-bottom-
     <main class="col-main">
   <div id="editor" hidden>
     <div class="ed-row">
+      <label class="ed-f" for="docname">이름
+        <input type="text" id="docname" placeholder="비워 두면 첫 줄이 이름이 됩니다" autocomplete="off">
+      </label>
       <label class="ed-f" for="folder">폴더
         <input type="text" id="folder" list="folderList" placeholder="예: 성인간호 2학기" autocomplete="off">
       </label>
@@ -408,7 +417,8 @@ var ICON512="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6A
       vol=$('vol'), gap=$('gap'), readSz=$('read'), repeatBox=$('repeat'),
       autoBox=$('auto'), editor=$('editor'), ta=$('text'), reader=$('reader'),
       qList=$('qList'), qCount=$('qCount'), addBtn=$('add'), edHint=$('edHint'),
-      folderIn=$('folder'), folderList=$('folderList'), searchIn=$('q'), collapseBtn=$('collapse'),
+      enSel=$('envoice'), enBox=$('enmix'),
+      nameIn=$('docname'), folderIn=$('folder'), folderList=$('folderList'), searchIn=$('q'), collapseBtn=$('collapse'),
       expBtn=$('expBtn'), impBtn=$('impBtn'), impFile=$('impFile'),
       bmBtn=$('bm'), bmWrap=$('bmWrap'), bmList=$('bmList'), bmCount=$('bmCount'), bmDoc=$('bmDoc'),
       saveState=$('saveState'), saveWarn=$('saveWarn'),
@@ -417,7 +427,7 @@ var ICON512="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6A
   var SAMPLE = "# 상부호흡기계 핵심 정리\n\n## 1. 부비동염 Sinusitis ★★★\n\n**원인·병태생리**\n\n- 비염이 부비동으로 퍼지거나 부비동 배액통로가 막혀 발생\n- 정상적으로 부비동 분비물은 코선반 아래로 배액됨 → 통로 막히면 분비물 정체 → 염증\n- 위험요인: 알레르기, 오래 지속되는 감기, 비중격만곡\n\n**증상**\n\n- 급성 부비동염: 상기도감염, 알레르기비염, 수영·치과치료 후 발생 가능\n- 만성 부비동염: 알레르기·비용종과 관련, 반복되는 급성 감염으로 발생\n\n> 기호는 읽지 않고 서식으로만 적용됩니다. 별표와 샵은 소리로 나가지 않습니다.";
 
   var chunks=[], nodes=[], cur=0, state='idle', seq=0, timer=null, waiting=false, voices=[];
-  var head=0, queued=0, alive=0, hasSpeech=false;
+  var head=0, queued=0, alive=0, hasSpeech=false, plan=[];
   var docs=[], docIdx=-1, editingId=null, nextId=1, follow=false;
   var markSet={}, openFolders=null, moveOpen=null;
   var UNFILED='미분류';
@@ -468,7 +478,7 @@ var ICON512="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6A
       v:2, saved:Date.now(),
       docs:docs, docIdx:docIdx, follow:follow, openFolders:openFolders,
       rate:rate.value, pitch:pitch.value, vol:vol.value, gap:gap.value,
-      read:readSz.value, voice:voiceSel.value, repeat:repeatBox.checked,
+      read:readSz.value, voice:voiceSel.value, enVoice:enSel.value, enMix:enBox.checked, repeat:repeatBox.checked,
       auto:autoBox.checked, theme:document.documentElement.getAttribute('data-theme')
     };
   }
@@ -782,6 +792,7 @@ var ICON512="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6A
     }
     reader.appendChild(frag);
     for(var k2=0;k2<chunks.length;k2++){ if(spoken(chunks[k2])){ hasSpeech=true; break; } }
+    buildPlan();
     update();
   }
   reader.addEventListener('click', function(e){
@@ -838,25 +849,81 @@ var ICON512="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6A
       .replace(/\s+/g, ' ')
       .trim();
   }
-  function applyVoice(u){
-    var v=voices[parseInt(voiceSel.value,10)];
-    if(v){ u.voice=v; u.lang=v.lang; } else { u.lang='ko-KR'; }
+  function voiceAt(sel){
+    var v = voices[parseInt(sel.value,10)];
+    return v || null;
+  }
+  function applyVoice(u, en){
+    var v = en ? voiceAt(enSel) : voiceAt(voiceSel);
+    if(!v && en) v = voiceAt(voiceSel);
+    if(v){ u.voice=v; u.lang=v.lang; } else { u.lang = en ? 'en-US' : 'ko-KR'; }
     u.rate=parseFloat(rate.value); u.pitch=parseFloat(pitch.value); u.volume=parseFloat(vol.value);
   }
-  function utterFor(i, txt, my){
-    var u=new SpeechSynthesisUtterance(txt);
-    applyVoice(u);
+
+  /* ---------- 영어는 영어 목소리로 ----------
+     한국어 음성에 영어 단어를 그대로 넘기면 글자를 하나씩 뜯어 읽는다.
+     그래서 한 문장을 영문 토막과 나머지로 갈라 각각 제 목소리로 말하게 한다. */
+  function enOn(){
+    return enBox.checked && enSel.options.length>0 && voiceAt(enSel);
+  }
+  var EN_RUN = /[A-Za-z][A-Za-z0-9'’.\-]*(?:[ \t]+[A-Za-z][A-Za-z0-9'’.\-]*)*/g;
+  function segment(text){
+    var plain=[{t:text, en:false}];
+    if(!enOn() || !text) return plain;
+    if(!/[A-Za-z]{2}/.test(text)) return plain;
+    if(!/[^\x00-\x7F]/.test(text)) return [{t:text, en:true}];   /* 통째로 영문이면 그대로 */
+    var out=[], last=0, m;
+    EN_RUN.lastIndex=0;
+    while((m=EN_RUN.exec(text))){
+      var s=m.index, e=s+m[0].length, word=m[0];
+      if(word.replace(/[^A-Za-z]/g,'').length < 2) continue;
+      if(s>last){
+        var pre=text.slice(last,s);
+        if(pre.trim()) out.push({t:pre, en:false});
+        else if(out.length) out[out.length-1].t += pre;
+      }
+      out.push({t:word, en:true});
+      last=e;
+    }
+    if(!out.length) return plain;
+    if(last<text.length){
+      var tail=text.slice(last);
+      if(tail.trim()) out.push({t:tail, en:false});
+    }
+    return out;
+  }
+  /* 문장 목록을 실제로 말할 토막 목록으로 펼친다 */
+  function buildPlan(){
+    plan=[];
+    for(var i=0;i<chunks.length;i++){
+      var segs=segment(chunks[i]);
+      for(var j=0;j<segs.length;j++){
+        var t=spoken(segs[j].t);
+        if(!t) continue;
+        plan.push({c:i, t:t, en:segs[j].en});
+      }
+    }
+  }
+  function planStart(ci){
+    for(var k=0;k<plan.length;k++) if(plan[k].c>=ci) return k;
+    return plan.length;
+  }
+
+  function utterFor(k, my){
+    var item=plan[k];
+    var u=new SpeechSynthesisUtterance(item.t);
+    applyVoice(u, item.en);
     u.onstart=function(){
       if(my!==seq || state==='idle') return;
-      cur=i; alive=Date.now(); update();
+      cur=item.c; alive=Date.now(); update();
     };
     u.onend=function(){
       if(my!==seq) return;
       queued--; alive=Date.now();
       if(state!=='playing') return;
-      if(head>=chunks.length && queued<=0){ finish(); return; }
+      if(head>=plan.length && queued<=0){ finish(); return; }
       var g=parseInt(gap.value,10);
-      if(g>0){
+      if(g>0 && (head>=plan.length || plan[head].c!==item.c)){
         waiting=true; clearTimeout(timer);
         timer=setTimeout(function(){ waiting=false; if(my===seq && state==='playing') enqueue(); }, g);
       } else enqueue();
@@ -867,7 +934,7 @@ var ICON512="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6A
       var err=ev && ev.error;
       if(err==='interrupted' || err==='canceled') return;
       if(state==='playing'){
-        head=i; waiting=true; clearTimeout(timer);
+        head=k; waiting=true; clearTimeout(timer);
         timer=setTimeout(function(){ waiting=false; if(my===seq && state==='playing') enqueue(); }, 300);
         return;
       }
@@ -875,22 +942,20 @@ var ICON512="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6A
     };
     return u;
   }
-  /* 다음 문장을 미리 엔진 큐에 넣어 둔다 — 문장 사이가 벌어지지 않고 한 흐름으로 이어진다 */
+  /* 다음 토막을 미리 엔진 큐에 넣어 둔다 — 사이가 벌어지지 않고 한 흐름으로 이어진다 */
   function enqueue(){
-    if(state!=='playing' || !chunks.length) return;
+    if(state!=='playing' || !plan.length) return;
     var ahead = parseInt(gap.value,10) > 0 ? 1 : 2;
-    while(queued < ahead && head < chunks.length){
-      var i = head++;
-      var txt = spoken(chunks[i]);
-      if(!txt) continue;
+    while(queued < ahead && head < plan.length){
+      var k = head++;
       queued++;
       alive=Date.now();
-      synth.speak(utterFor(i, txt, seq));
+      synth.speak(utterFor(k, seq));
     }
-    if(queued<=0 && head>=chunks.length) finish();
+    if(queued<=0 && head>=plan.length) finish();
   }
   function finish(){
-    if(repeatBox.checked && hasSpeech){
+    if(repeatBox.checked && plan.length){
       head=0; queued=0; cur=0; update(); enqueue(); return;
     }
     state='idle'; update();
@@ -899,7 +964,9 @@ var ICON512="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6A
     if(!chunks.length) return;
     clearTimeout(timer); waiting=false; seq++; synth.cancel(); queued=0;
     cur=Math.max(0, Math.min(i, chunks.length-1));
-    head=cur; state='playing'; alive=Date.now(); update();
+    head=planStart(cur);
+    if(head>=plan.length){ state='idle'; update(); return; }
+    state='playing'; alive=Date.now(); update();
     setTimeout(enqueue, 70);
   }
   function toggle(){
@@ -908,7 +975,7 @@ var ICON512="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6A
       state='paused';
       clearTimeout(timer); waiting=false;
       synth.pause();
-      if(!synth.paused){ seq++; synth.cancel(); queued=0; head=cur; }
+      if(!synth.paused){ seq++; synth.cancel(); queued=0; head=planStart(cur); }
       update();
     } else if(state==='paused'){
       state='playing'; alive=Date.now();
@@ -930,7 +997,7 @@ var ICON512="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6A
     if(state!=='playing' || waiting) return;
     if(synth.speaking || synth.pending){ alive=Date.now(); return; }
     if(Date.now()-alive < 1500) return;
-    seq++; queued=0; head=cur; enqueue();
+    seq++; queued=0; head=planStart(cur); enqueue();
   }, 1500);
 
   /* ---------- 목소리 ---------- */
@@ -949,6 +1016,24 @@ var ICON512="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6A
     }
     $('novoice').hidden = ko.length>0;
     voiceSel.value = (keep && voices[parseInt(keep,10)]) ? keep : '0';
+
+    var keepEn=enSel.value, firstEn=-1;
+    enSel.textContent='';
+    for(var k=0;k<voices.length;k++){
+      if(!/^en/i.test(voices[k].lang)) continue;
+      if(firstEn<0) firstEn=k;
+      var oe=document.createElement('option');
+      oe.value=k; oe.textContent=voices[k].name+' · '+voices[k].lang;
+      enSel.appendChild(oe);
+    }
+    if(firstEn<0){
+      enBox.disabled=true; enSel.disabled=true;
+    } else {
+      enBox.disabled=false; enSel.disabled=false;
+      enSel.value = (keepEn && voices[parseInt(keepEn,10)] && /^en/i.test(voices[parseInt(keepEn,10)].lang))
+        ? keepEn : String(firstEn);
+    }
+    if(chunks.length) buildPlan();
   }
 
   /* ---------- 대기열 시트(좁은 화면) ---------- */
@@ -980,6 +1065,12 @@ var ICON512="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6A
       if(s) return s.length>46 ? s.slice(0,46)+'…' : s;
     }
     return '빈 글';
+  }
+  /* 직접 붙인 이름이 있으면 그걸 쓰고, 없으면 첫 줄에서 뽑는다 */
+  function nameOf(d){
+    if(!d) return '';
+    var n = d.name ? String(d.name).trim() : '';
+    return n || titleOf(d.text);
   }
   function findIdx(id){
     for(var i=0;i<docs.length;i++) if(docs[i].id===id) return i;
@@ -1024,7 +1115,8 @@ var ICON512="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6A
     sel.title='이 글 읽기';
     var n=document.createElement('span'); n.className='q-n'; n.textContent=(i+1);
     var body=document.createElement('span'); body.className='q-body';
-    var tx=document.createElement('span'); tx.className='q-t'; tx.textContent=titleOf(d.text);
+    var tx=document.createElement('span'); tx.className='q-t'; tx.textContent=nameOf(d);
+    if(d.name) tx.title=d.name;
     var mt=document.createElement('span'); mt.className='q-m';
     mt.appendChild(document.createTextNode(commas(d.text.replace(/\s/g,'').length)+'자'));
     if(d.marks && d.marks.length){
@@ -1054,6 +1146,11 @@ var ICON512="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6A
   function makeMover(d){
     var box=document.createElement('div');
     box.className='q-move';
+    var nm=document.createElement('input');
+    nm.type='text'; nm.className='q-rename';
+    nm.value = d.name ? String(d.name) : '';
+    nm.placeholder = titleOf(d.text);
+    nm.setAttribute('aria-label','대기열 이름');
     var sl=document.createElement('select');
     var names=folderNames();
     if(names.indexOf(UNFILED)<0) names.push(UNFILED);
@@ -1065,16 +1162,23 @@ var ICON512="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6A
     }
     var inp=document.createElement('input');
     inp.type='text'; inp.placeholder='새 폴더 이름'; inp.autocomplete='off';
-    var ok=document.createElement('button'); ok.textContent='옮기기';
+    var ok=document.createElement('button'); ok.className='main'; ok.textContent='저장';
     var no=document.createElement('button'); no.textContent='취소';
     ok.addEventListener('click', function(){
+      var nv = nm.value.trim();
+      if(nv) d.name = nv; else delete d.name;
       var name = inp.value.trim() || sl.value;
       d.folder = (name===UNFILED) ? '' : name;
-      moveOpen=null; fillFolderList(); renderQueue(); save();
+      moveOpen=null;
+      fillFolderList(); renderQueue(); renderBookmarks(); flushSave();
     });
     no.addEventListener('click', function(){ moveOpen=null; renderQueue(); });
-    inp.addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); ok.click(); } });
-    box.appendChild(sl); box.appendChild(inp); box.appendChild(ok); box.appendChild(no);
+    function onEnter(e){ if(e.key==='Enter'){ e.preventDefault(); ok.click(); } }
+    nm.addEventListener('keydown', onEnter);
+    inp.addEventListener('keydown', onEnter);
+    box.appendChild(nm); box.appendChild(sl); box.appendChild(inp);
+    box.appendChild(ok); box.appendChild(no);
+    setTimeout(function(){ nm.focus(); nm.select(); }, 0);
     return box;
   }
 
@@ -1095,7 +1199,7 @@ var ICON512="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6A
       for(var i=0;i<docs.length;i++){
         if(folderOf(docs[i])!==f) continue;
         if(term){
-          var hay = (titleOf(docs[i].text)+' '+f).toLowerCase();
+          var hay = (nameOf(docs[i])+' '+titleOf(docs[i].text)+' '+f).toLowerCase();
           if(hay.indexOf(term)<0) continue;
         }
         rows.push(i);
@@ -1151,7 +1255,7 @@ var ICON512="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6A
     if(autoplay) speakFrom(0);
   }
   function addDoc(text, autoplay){
-    docs.push({id:newId(), text:text, folder:(folderIn.value||'').trim(), marks:[]});
+    docs.push({id:newId(), text:text, name:(nameIn.value||'').trim(), folder:(folderIn.value||'').trim(), marks:[]});
     stopAll(); editingId=null; moveOpen=null;
     showDoc(docs.length-1); setMode(false);
     if(autoplay) speakFrom(0);
@@ -1228,7 +1332,7 @@ var ICON512="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6A
     var d=docs[docIdx], list=(d && d.marks) ? d.marks : [];
     bmWrap.hidden = !list.length;
     bmCount.textContent = list.length;
-    bmDoc.textContent = d ? titleOf(d.text) : '';
+    bmDoc.textContent = d ? nameOf(d) : '';
     bmList.textContent='';
     for(var k=0;k<list.length;k++){
       var m=list[k];
@@ -1281,6 +1385,7 @@ var ICON512="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6A
       if(!sd || typeof sd.text!=='string' || !sd.text.trim()) continue;
       docs.push({
         id:newId(), text:sd.text,
+        name: sd.name ? String(sd.name) : '',
         folder: sd.folder ? String(sd.folder) : '',
         marks: Array.isArray(sd.marks) ? sd.marks : []
       });
@@ -1349,10 +1454,11 @@ var ICON512="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6A
     var i = id ? findIdx(id) : -1;
     editingId = i>=0 ? id : null;
     ta.value = i>=0 ? docs[i].text : '';
+    nameIn.value = i>=0 ? (docs[i].name||'') : '';
     folderIn.value = i>=0 ? (docs[i].folder||'') : (docs[docIdx] ? (docs[docIdx].folder||'') : '');
     fillFolderList();
     edHint.textContent = i>=0
-      ? ((i+1)+'번 글을 고치는 중입니다. 다 고치면 읽기 화면으로를 누르세요.')
+      ? (nameOf(docs[i])+' — 고치는 중입니다. 다 고치면 읽기 화면으로를 누르세요.')
       : '붙여넣으면 대기열에 새 글로 쌓이고 바로 읽기 시작합니다. 폴더 칸을 채우면 그 폴더로 들어갑니다.';
     setMode(true);
   }
@@ -1364,6 +1470,7 @@ var ICON512="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6A
       if(i>=0){
         if(t.trim()){
           docs[i].text=t; docs[i].folder=(folderIn.value||'').trim(); delete docs[i].sample;
+          var nv=(nameIn.value||'').trim(); if(nv) docs[i].name=nv; else delete docs[i].name;
           stopAll(); showDoc(i);
         } else delDoc(i);
       }
@@ -1390,6 +1497,7 @@ var ICON512="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6A
         var i=findIdx(editingId); editingId=null;
         if(i>=0){
           docs[i].text=t; docs[i].folder=(folderIn.value||'').trim(); delete docs[i].sample;
+          var nv=(nameIn.value||'').trim(); if(nv) docs[i].name=nv; else delete docs[i].name;
           stopAll(); showDoc(i); setMode(false);
           if(autoBox.checked) speakFrom(0);
         }
@@ -1422,6 +1530,9 @@ var ICON512="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6A
   bind(gap, $('gapV'), function(v){ return (v/1000).toFixed(1)+'초'; });
   bind(readSz, $('readV'), function(v){ reader.style.setProperty('--read', v+'px'); return v+'px'; });
   [voiceSel, repeatBox, autoBox].forEach(function(el){ el.addEventListener('change', save); });
+  [enSel, enBox].forEach(function(el){
+    el.addEventListener('change', function(){ buildPlan(); save(); if(state==='playing') speakFrom(cur); });
+  });
   [rate, pitch, vol, voiceSel].forEach(function(el){
     el.addEventListener('change', function(){ if(state==='playing') speakFrom(cur); });
   });
@@ -1479,6 +1590,8 @@ var ICON512="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6A
     if(st.repeat) repeatBox.checked=true;
     if(st.auto===false) autoBox.checked=false;
     if(st.voice) voiceSel.value=st.voice;
+    if(st.enVoice) enSel.value=st.enVoice;
+    if(st.enMix===false) enBox.checked=false;
     [rate,pitch,vol,gap,readSz].forEach(function(el){ el.dispatchEvent(new Event('input')); });
     if(st.follow){
       follow=true; locateBtn.classList.add('on'); locateBtn.setAttribute('aria-pressed','true');
@@ -1489,6 +1602,7 @@ var ICON512="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6A
         var sd=st.docs[di];
         if(sd && typeof sd.text==='string') docs.push({
           id:sd.id||newId(), text:sd.text,
+          name: sd.name ? String(sd.name) : '',
           folder: sd.folder ? String(sd.folder) : '',
           marks: Array.isArray(sd.marks) ? sd.marks : [],
           sample: !!sd.sample
