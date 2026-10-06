@@ -39,11 +39,15 @@ body{
 #queueBtn{display:none}
 #qBadge{color:var(--accent); font-variant-numeric:tabular-nums}
 #scrim{display:none}
+.row button{display:inline-flex; align-items:center; gap:.4em; white-space:nowrap}
+.row button .g{font-size:.95em; line-height:1}
 
 /* 좁은 화면: 대기열을 아래에서 올라오는 시트로 */
 @media (max-width: 1000px){
   .cols{display:block}
-  #queueBtn{display:inline-block}
+  #queueBtn{display:inline-flex}
+  .col-side .q-head{position:sticky; top:0; z-index:2; background:var(--card); padding-top:2px}
+  .col-side .q-list{max-height:none}
   .col-side{
     position:fixed; left:0; right:0; bottom:0; top:auto; z-index:60;
     max-height:84vh; border-radius:16px 16px 0 0;
@@ -56,9 +60,11 @@ body{
   .col-side.open{transform:translateY(0); pointer-events:auto}
   .sheet-grip{
     display:block; flex:0 0 auto; align-self:center;
-    width:40px; height:4px; border-radius:999px; background:var(--line);
-    margin:9px 0 11px;
+    width:54px; height:5px; border-radius:999px; background:var(--line);
+    border:0; padding:0; margin:10px 0 12px; cursor:pointer;
   }
+  .sheet-grip:hover{background:var(--accent)}
+  .col-side .bm-list{max-height:none}
   .col-side .q-wrap, .col-side .bm-wrap{border:0; border-radius:0; padding:0 0 14px; background:transparent}
   .col-side .bm-wrap{border-top:1px solid var(--line); padding-top:12px}
   .q-list{max-height:40vh}
@@ -68,12 +74,27 @@ body{
     background:rgba(10,16,22,.44); border:0;
   }
 }
-@media (max-width: 560px){
-  .bar{padding:10px}
-  .bar button{padding:9px 11px}
-  button.main{min-width:96px; padding-inline:16px}
-  .counter{width:100%; margin-left:0; text-align:right}
+/* 좁은 화면: 조작부를 두 줄로 압축하고 글자 대신 기호만 */
+@media (max-width: 700px){
+  header{padding-block:16px 10px}
+  .sub{font-size:12.5px}
+  .bar{padding:9px; gap:8px}
+  .row{gap:6px}
+  .row.trans{flex-wrap:nowrap; min-width:0}
+  .counter{min-width:0; overflow:hidden; text-overflow:ellipsis}
+  .row.trans button{flex:0 0 auto; padding:10px 12px}
+  button.main{min-width:0; flex:1 1 auto; padding-inline:12px; justify-content:center}
+  #prev .t, #next .t{display:none}
+  #prev, #next{padding-inline:13px}
+  .counter{font-size:12.5px}
+  .row.tools{display:flex; flex-wrap:nowrap}
+  .row.tools button{flex:1 1 0; min-width:0; justify-content:center; padding:10px 6px}
+  .row.tools .t{display:none}
+  .row.tools .g{font-size:15px}
+  #qBadge{font-size:12px}
   #reader{padding:16px 14px}
+  .wrap{padding-block:0 86px}
+  details.set > summary{padding-block:2px}
 }
 header{padding-block:22px 14px}
 h1{font-size:clamp(21px,4.5vw,28px); margin:0 0 4px; letter-spacing:-.01em}
@@ -249,20 +270,20 @@ kbd{font:inherit; font-size:11.5px; border:1px solid var(--line); border-bottom-
   <div id="novoice" class="warn" hidden>한국어 음성이 설치돼 있지 않습니다. 설정 → 시간 및 언어 → 음성에서 한국어 음성을 추가하면 목록에 나타납니다.</div>
 
   <div class="bar">
-    <div class="row">
-      <button id="play" class="main">재생</button>
-      <button id="stop">정지</button>
-      <button id="prev">◀ 이전</button>
-      <button id="next">다음 ▶</button>
+    <div class="row trans">
+      <button id="play" class="main"><span class="t">재생</span></button>
+      <button id="stop"><span class="t">정지</span></button>
+      <button id="prev" aria-label="이전 문장"><span class="g">◀</span><span class="t">이전</span></button>
+      <button id="next" aria-label="다음 문장"><span class="t">다음</span><span class="g">▶</span></button>
       <span id="counter" class="counter">0 / 0</span>
     </div>
     <div class="track"><i id="fill"></i></div>
-    <div class="row">
-      <button id="queueBtn" aria-expanded="false">대기열 <b id="qBadge">0</b></button>
-      <button id="bm" title="지금 읽는 문장 북마크">☆ 북마크</button>
-      <button id="locate" aria-pressed="false">읽는 곳 따라가기</button>
-      <button id="mode">새 글 붙여넣기</button>
-      <button id="theme">야간</button>
+    <div class="row tools">
+      <button id="bm" title="지금 읽는 문장 북마크" aria-label="북마크"><span class="g">☆</span><span class="t">북마크</span></button>
+      <button id="locate" aria-pressed="false" title="읽는 곳 따라가기" aria-label="읽는 곳 따라가기"><span class="g">⇵</span><span class="t">읽는 곳 따라가기</span></button>
+      <button id="mode" title="새 글 붙여넣기" aria-label="새 글 붙여넣기"><span class="g">✎</span><span class="t">새 글 붙여넣기</span></button>
+      <button id="theme" title="야간 모드" aria-label="야간 모드"><span class="g">◐</span><span class="t">야간</span></button>
+      <button id="queueBtn" aria-expanded="false" aria-label="대기열 열기"><span class="g">☰</span><span class="t">대기열</span> <b id="qBadge">0</b></button>
     </div>
     <details class="set">
       <summary><span>읽기 설정</span></summary>
@@ -311,7 +332,7 @@ kbd{font:inherit; font-size:11.5px; border:1px solid var(--line); border-bottom-
     </main>
 
     <aside class="col-side" id="side">
-      <div class="sheet-grip" aria-hidden="true"></div>
+      <button class="sheet-grip" id="grip" aria-label="대기열 닫기" title="닫기"></button>
   <section class="q-wrap">
     <div class="q-head">
       <span class="q-title">대기열 <b id="qCount">0</b></span>
@@ -609,6 +630,12 @@ kbd{font:inherit; font-size:11.5px; border:1px solid var(--line); border-bottom-
   });
 
   var lastNow=-1;
+  /* 버튼은 기호와 글자를 따로 들고 있다 — 좁은 화면에선 글자만 숨긴다 */
+  function label(btn, text, glyph){
+    var t=btn.querySelector('.t'), g=btn.querySelector('.g');
+    if(t) t.textContent=text; else btn.textContent=text;
+    if(g && glyph) g.textContent=glyph;
+  }
   function cls(i){
     return 's'
       + (i===cur && state!=='idle' ? ' now' : (i<cur ? ' done' : ''))
@@ -622,11 +649,11 @@ kbd{font:inherit; font-size:11.5px; border:1px solid var(--line); border-bottom-
     }
     bmBtn.disabled = !chunks.length;
     bmBtn.classList.toggle('on', !!markSet[cur]);
-    bmBtn.textContent = markSet[cur] ? '★ 북마크' : '☆ 북마크';
+    label(bmBtn, '북마크', markSet[cur] ? '★' : '☆');
     lastNow = state!=='idle' ? cur : -1;
     counter.textContent = (chunks.length? cur+1 : 0) + ' / ' + chunks.length;
     fill.style.width = chunks.length ? ((state==='idle'&&cur===0 ? 0 : (cur+1)/chunks.length*100)+'%') : '0';
-    playBtn.textContent = state==='playing' ? '일시정지' : (state==='paused' ? '이어 읽기' : '재생');
+    label(playBtn, state==='playing' ? '일시정지' : (state==='paused' ? '이어 읽기' : '재생'));
     var none = chunks.length===0;
     playBtn.disabled=none; stopBtn.disabled=none||state==='idle';
     prevBtn.disabled=none; nextBtn.disabled=none;
@@ -765,14 +792,19 @@ kbd{font:inherit; font-size:11.5px; border:1px solid var(--line); border-bottom-
     if(!sheetMode()) return;
     side.classList.add('open'); scrim.hidden=false;
     queueBtn.setAttribute('aria-expanded','true');
+    queueBtn.setAttribute('aria-label','대기열 닫기');
+    try{ document.body.style.overflow='hidden'; }catch(e){}
   }
   function closeSheet(){
     side.classList.remove('open'); scrim.hidden=true;
     queueBtn.setAttribute('aria-expanded','false');
+    queueBtn.setAttribute('aria-label','대기열 열기');
+    try{ document.body.style.overflow=''; }catch(e){}
   }
   function sheetOpen(){ return sheetMode() && side.classList.contains('open'); }
   queueBtn.addEventListener('click', function(){ sheetOpen() ? closeSheet() : openSheet(); });
   scrim.addEventListener('click', closeSheet);
+  $('grip').addEventListener('click', closeSheet);
   window.addEventListener('resize', function(){ if(!sheetMode()) closeSheet(); });
 
   /* ---------- 대기열 ---------- */
@@ -1113,7 +1145,7 @@ kbd{font:inherit; font-size:11.5px; border:1px solid var(--line); border-bottom-
   /* ---------- 입력 ---------- */
   function setMode(editing){
     editor.hidden=!editing; reader.hidden=editing;
-    modeBtn.textContent = editing ? '읽기 화면으로' : '새 글 붙여넣기';
+    label(modeBtn, editing ? '읽기 화면으로' : '새 글 붙여넣기', editing ? '✓' : '✎');
     if(editing) ta.focus();
   }
   function openEditor(id){
@@ -1211,7 +1243,7 @@ kbd{font:inherit; font-size:11.5px; border:1px solid var(--line); border-bottom-
   themeBtn.addEventListener('click', function(){
     var dark = document.documentElement.getAttribute('data-theme')==='dark';
     document.documentElement.setAttribute('data-theme', dark?'light':'dark');
-    themeBtn.textContent = dark?'야간':'주간';
+    label(themeBtn, dark?'야간':'주간', dark?'◐':'◑');
     save();
   });
 
@@ -1239,7 +1271,7 @@ kbd{font:inherit; font-size:11.5px; border:1px solid var(--line); border-bottom-
 
   var st=load();
   if(st){
-    if(st.theme){ document.documentElement.setAttribute('data-theme', st.theme); themeBtn.textContent = st.theme==='dark'?'주간':'야간'; }
+    if(st.theme){ document.documentElement.setAttribute('data-theme', st.theme); label(themeBtn, st.theme==='dark'?'주간':'야간', st.theme==='dark'?'◑':'◐'); }
     if(st.rate!=null) rate.value=st.rate;
     if(st.pitch!=null) pitch.value=st.pitch;
     if(st.vol!=null) vol.value=st.vol;
